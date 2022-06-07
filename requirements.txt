@@ -2,3 +2,4 @@ pyle38==0.6.1
 psycopg2==2.9.3
 pydantic==1.9.1
 geojson-pydantic==0.3.3
+redis==4.3.3 
