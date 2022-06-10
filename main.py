@@ -6,6 +6,16 @@ import db
 import tile38
 import asyncio
 from redis_helper import redis_helper
+from pydantic import BaseModel
+import time
+
+async def start_updating():
+    while True:
+        start_time = round(time.time() * 1000)
+        await update()
+        end_time = round(time.time() * 1000)
+        print("Updating stops took", end_time - start_time, "ms")
+        time.sleep(30)
 
 async def update():
     stops = db.get_all_stops_from_db()
@@ -15,25 +25,30 @@ async def update():
         count_results = []
         for stop in stops:
             result = await tile38.get_vehicles(stop.area)
-            count_results.append(count_modes(result=result))
+            stop.num_vehicles_available = count_modes(result=result)
             pipe.get("stop:" + stop.stop_id + ":status")
         res = pipe.execute()
 
         # Determine new state.
         for index, stop in enumerate(stops):
-            previous_state = res[index]
-            if previous_state == None:
-                previous_state = get_initial_state(stop.capacity)
-            count_result = count_results[index]
-            if "combined" in stop.capacity:
-                result = calculate_places_available_combined(stop.capacity["combined"], count_result)
-            else:
-                result = calculate_places_available_per_mode(stop.capacity, count_result)
-            print(stop.stop_id)
-            print(result)
-            print(count_result)
-            print(stop.capacity)
-            
+            old_state = res[index]
+            if old_state  == None:
+                old_state = get_initial_state(stop.capacity)
+            new_state = calculate_available_places(stop.capacity, stop.num_vehicles_available)
+            stop.num_places_available = new_state
+            determine_state_change(stop.capacity, old_state, new_state)
+
+        store_stops(r, stops)
+        
+
+def store_stops(r, stops):
+    pipe = r.pipeline()
+    pipe.set("stops_last_updated", round(time.time() * 1000))
+    for stop in stops:
+        pipe.setex("stop:" + stop.stop_id, 300, stop.json())
+        pipe.sadd("all_stops", stop.stop_id)
+        pipe.sadd("stops_per_municipality:" + stop.municipality, stop.stop_id)
+    pipe.execute()
 
 def count_modes(result):
     vehicles_available = {
@@ -50,6 +65,12 @@ def count_modes(result):
         else:
             vehicles_available["other"] += 1
     return vehicles_available
+
+def calculate_available_places(capacity, counted_vehicles):
+    if "combined" in capacity:
+        return calculate_places_available_combined(capacity["combined"], counted_vehicles)
+    return calculate_places_available_per_mode(capacity, counted_vehicles)
+
 
 def calculate_places_available_per_mode(capacity, counted_vehicles):
     places_available = {
@@ -70,8 +91,6 @@ def calculate_places_available_per_mode(capacity, counted_vehicles):
         else:
             places_available[mode] = max(vehicles_capacity - counted_vehicles[mode], 0)
     return places_available
-
-
 
 def calculate_places_available_combined(combined_capacitiy, counted_vehicles):
     total = 0
@@ -102,29 +121,43 @@ def get_current_vehicles():
 
 def get_initial_state(capacity):
     state_per_mode = {
-        "moped": "OPEN",
-        "cargo_bicycle": "OPEN",
-        "bicycle": "OPEN",
-        "car": "OPEN",
-        "other": "OPEN"
+        "moped": -1,
+        "cargo_bicycle": -1,
+        "bicycle": -1,
+        "car": -1,
+        "other": -1
     }
     for key, value in capacity.items():
         if key in state_per_mode and value == 0:
-            state_per_mode[key] = "CLOSED"
+            state_per_mode[key] = 0
         if key == "combined" and value == 0:
             return {
-                "moped": "CLOSED",
-                "cargo_bicycle": "CLOSED",
-                "bicycle": "CLOSED",
-                "car": "CLOSED",
-                "other": "CLOSED"
+                "moped": 0,
+                "cargo_bicycle": 0,
+                "bicycle": 0,
+                "car": 0,
+                "other": 0
             }
     return state_per_mode
 
+class StateChange(BaseModel):
+    opened: list[str] = []
+    closed: list[str] = []
+
+def determine_state_change(capacity, old_state, new_state):
+    state_changes = StateChange()
+    for mode, old_value in old_state.items():
+        new_value = new_state[mode]
+        if mode not in new_state:
+            state_changes.closed.append(mode)
+        elif old_value > 0 and new_value == 0:
+            state_changes.closed.append(mode)
+        elif old_value == 0 and new_value > 0:
+            state_changes.opened.append(mode)
 
 
-
-asyncio.run(update())
+asyncio.run(start_updating())
+  
 
 
 #  select st_asgeojson(st_buffer(area::geography, 10)) from zones where zone_id = 51297;

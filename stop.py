@@ -14,11 +14,16 @@ class MdsStop(BaseModel):
     num_vehicles_available: Dict[str, int] = {}
     num_vehicles_disabled: Dict[str, int] = {}
     num_places_available: Dict[str, int] = {}
+    geography_id: str
     area: PolygonFeatureModel
+    municipality: str
 
     class Config:
         fields = {
             'area': {
+                'exclude': True,
+            },
+            'municipality': {
                 'exclude': True,
             }
         }
