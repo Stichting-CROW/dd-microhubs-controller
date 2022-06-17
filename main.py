@@ -1,5 +1,8 @@
+from concurrent.futures import process
 from itertools import zip_longest
 import json
+from multiprocessing.sharedctypes import Value
+from operator import mod
 from unittest import result
 from tile38_helper import tile38_helper
 import db
@@ -8,6 +11,7 @@ import asyncio
 from redis_helper import redis_helper
 from pydantic import BaseModel
 import time
+import stop
 
 async def start_updating():
     while True:
@@ -22,32 +26,53 @@ async def update():
     with redis_helper.get_resource() as r:
         # Count vehicles
         pipe = r.pipeline()
-        count_results = []
         for stop in stops:
             result = await tile38.get_vehicles(stop.area)
             stop.num_vehicles_available = count_modes(result=result)
             pipe.get("stop:" + stop.stop_id + ":status")
         res = pipe.execute()
 
+        deltas_states = []
         # Determine new state.
         for index, stop in enumerate(stops):
             old_state = res[index]
-            if old_state  == None:
+            if old_state == None:
                 old_state = get_initial_state(stop.capacity)
-            new_state = calculate_available_places(stop.capacity, stop.num_vehicles_available)
+            new_state = calculate_available_places(stop.capacity, stop.num_vehicles_available, stop.status)
+            new_state = check_flippering(new_state=new_state, old_state=old_state, capacity=stop.capacity)
+            
+            
+            is_returning = check_if_any_place_is_available(new_state)
+            stop.status["is_returning"] = is_returning
             stop.num_places_available = new_state
-            determine_state_change(stop.capacity, old_state, new_state)
+            
+            state_change = get_state_changes(stop, old_state, new_state)
+            if state_change:
+                deltas_states.append(state_change)
 
         store_stops(r, stops)
+        send_notifications(deltas_states)
         
 
 def store_stops(r, stops):
     pipe = r.pipeline()
+
     pipe.set("stops_last_updated", round(time.time() * 1000))
+    municipalities = {}
+
+    # Delete previous et.
+    pipe.delete("all_stops")
     for stop in stops:
         pipe.setex("stop:" + stop.stop_id, 300, stop.json())
         pipe.sadd("all_stops", stop.stop_id)
-        pipe.sadd("stops_per_municipality:" + stop.municipality, stop.stop_id)
+        # Remove set before updating it with new values.
+        key_stops_per_municipality = "stops_per_municipality:" + stop.municipality
+        # Remove existing data to replace it with new data.
+        if stop.municipality not in municipalities:
+            pipe.delete(key_stops_per_municipality)
+            municipalities[stop.municipality] = True
+        pipe.sadd(key_stops_per_municipality, stop.stop_id)
+        pipe.expire(key_stops_per_municipality, 300)
     pipe.execute()
 
 def count_modes(result):
@@ -66,7 +91,15 @@ def count_modes(result):
             vehicles_available["other"] += 1
     return vehicles_available
 
-def calculate_available_places(capacity, counted_vehicles):
+def calculate_available_places(capacity, counted_vehicles, status):
+    if "is_returning" in status and status["is_returning"] == False:
+        return {
+            "moped": 0,
+            "cargo_bicycle": 0,
+            "bicycle": 0,
+            "car": 0,
+            "other": 0
+        }
     if "combined" in capacity:
         return calculate_places_available_combined(capacity["combined"], counted_vehicles)
     return calculate_places_available_per_mode(capacity, counted_vehicles)
@@ -140,12 +173,47 @@ def get_initial_state(capacity):
             }
     return state_per_mode
 
+
+
+# A zone should only be opened if number of vehicles < x% (start with 95)
+def check_flippering(new_state, old_state, capacity):
+    if "combined" in capacity:
+        return check_flippering_combined(new_state=new_state, old_state=old_state, capacity=capacity["combined"])
+    return check_flippering_per_mode(new_state=new_state, old_state=old_state, capacity=capacity)
+
+def check_flippering_per_mode(new_state, old_state, capacity):
+    for mode, value in new_state.items():
+        if value > 0 and mode in old_state and old_state[mode] == 0 and mode in capacity and value < 0.05 * capacity:
+            print("Anti-flipper for mode", mode)
+            new_state[mode] = 0
+    return new_state
+
+def check_flippering_combined(new_state, old_state, capacity):
+    old_places_available = sum(old_state.values())
+    if old_places_available > 0:
+        return new_state
+    # moped is arbitrary in this situation, when a combined capacity is setted every mode can be used.
+    new_places_available = new_state["moped"]
+    if new_places_available < 0.05 * capacity:
+        print("Anti flipper effect for combined, new_state was")
+        print(new_state)
+        print("capacity", capacity)
+        return {
+            "moped": 0,
+            "cargo_bicycle": 0,
+            "bicycle": 0,
+            "car": 0,
+            "other": 0
+        }
+    return new_state
+
 class StateChange(BaseModel):
+    stop: stop.MdsStop
     opened: list[str] = []
     closed: list[str] = []
 
-def determine_state_change(capacity, old_state, new_state):
-    state_changes = StateChange()
+def get_state_changes(stop, old_state, new_state):
+    state_changes = StateChange(stop=stop)
     for mode, old_value in old_state.items():
         new_value = new_state[mode]
         if mode not in new_state:
@@ -154,7 +222,19 @@ def determine_state_change(capacity, old_state, new_state):
             state_changes.closed.append(mode)
         elif old_value == 0 and new_value > 0:
             state_changes.opened.append(mode)
+    new_modes = set(new_state.keys()) - set(old_state.keys())
+    for new_mode in new_modes:
+        if new_state[new_mode] > 0:
+            state_changes.opened.append(mode)
+    if not state_changes.closed and not state_changes.opened:
+        return None
+    return state_changes
 
+def check_if_any_place_is_available(available_places):
+    for _, value in available_places.items():
+        if value > 0:
+            return True
+    return False
 
 asyncio.run(start_updating())
   
