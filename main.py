@@ -31,9 +31,11 @@ async def update():
         # Determine new state.
         for index, stop in enumerate(stops):
             print(stop.stop_id)
-            old_state = json.loads(res[index])
+            old_state = res[index]
             if old_state == None:
                 old_state = get_initial_state(stop.capacity)
+            else:
+                old_state = json.loads(res[index])
             print("OLD")
             print(old_state)
             new_state = calculate_available_places(stop.capacity, stop.num_vehicles_available, stop.status)
