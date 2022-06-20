@@ -1,10 +1,3 @@
-from concurrent.futures import process
-from itertools import zip_longest
-import json
-from multiprocessing.sharedctypes import Value
-from operator import mod
-from unittest import result
-from tile38_helper import tile38_helper
 import db
 import tile38
 import asyncio
@@ -12,6 +5,8 @@ from redis_helper import redis_helper
 from pydantic import BaseModel
 import time
 import stop
+import json
+from notifications import notifications
 
 async def start_updating():
     while True:
@@ -35,23 +30,29 @@ async def update():
         deltas_states = []
         # Determine new state.
         for index, stop in enumerate(stops):
-            old_state = res[index]
+            print(stop.stop_id)
+            old_state = json.loads(res[index])
             if old_state == None:
                 old_state = get_initial_state(stop.capacity)
+            print("OLD")
+            print(old_state)
             new_state = calculate_available_places(stop.capacity, stop.num_vehicles_available, stop.status)
+            print("NEW")
+            print(new_state)
             new_state = check_flippering(new_state=new_state, old_state=old_state, capacity=stop.capacity)
-            
             
             is_returning = check_if_any_place_is_available(new_state)
             stop.status["is_returning"] = is_returning
             stop.num_places_available = new_state
+            print(stops[index].num_places_available)
             
             state_change = get_state_changes(stop, old_state, new_state)
             if state_change:
                 deltas_states.append(state_change)
 
+        print(deltas_states)
         store_stops(r, stops)
-        send_notifications(deltas_states)
+        notifications.send_notifications(deltas_states)
         
 
 def store_stops(r, stops):
@@ -64,6 +65,7 @@ def store_stops(r, stops):
     pipe.delete("all_stops")
     for stop in stops:
         pipe.setex("stop:" + stop.stop_id, 300, stop.json())
+        pipe.setex("stop:" + stop.stop_id + ":status", 3600 * 24, json.dumps(stop.num_places_available))
         pipe.sadd("all_stops", stop.stop_id)
         # Remove set before updating it with new values.
         key_stops_per_municipality = "stops_per_municipality:" + stop.municipality
@@ -106,6 +108,7 @@ def calculate_available_places(capacity, counted_vehicles, status):
 
 
 def calculate_places_available_per_mode(capacity, counted_vehicles):
+    print("CHECK")
     places_available = {
         "moped": 0,
         "cargo_bicycle": 0,
@@ -117,7 +120,7 @@ def calculate_places_available_per_mode(capacity, counted_vehicles):
     if "other" in counted_vehicles:
         counted_vehicles["moped"] += counted_vehicles["other"]
     for mode, vehicles_capacity in capacity.items():
-        if mode in ["combined", "other"]:
+        if mode == "combined":
             continue
         elif mode not in counted_vehicles:
             places_available[mode] = vehicles_capacity
@@ -183,7 +186,7 @@ def check_flippering(new_state, old_state, capacity):
 
 def check_flippering_per_mode(new_state, old_state, capacity):
     for mode, value in new_state.items():
-        if value > 0 and mode in old_state and old_state[mode] == 0 and mode in capacity and value < 0.05 * capacity:
+        if value > 0 and mode in old_state and old_state[mode] == 0 and mode in capacity and value < 0.05 * capacity[mode]:
             print("Anti-flipper for mode", mode)
             new_state[mode] = 0
     return new_state
@@ -195,9 +198,6 @@ def check_flippering_combined(new_state, old_state, capacity):
     # moped is arbitrary in this situation, when a combined capacity is setted every mode can be used.
     new_places_available = new_state["moped"]
     if new_places_available < 0.05 * capacity:
-        print("Anti flipper effect for combined, new_state was")
-        print(new_state)
-        print("capacity", capacity)
         return {
             "moped": 0,
             "cargo_bicycle": 0,
@@ -225,7 +225,7 @@ def get_state_changes(stop, old_state, new_state):
     new_modes = set(new_state.keys()) - set(old_state.keys())
     for new_mode in new_modes:
         if new_state[new_mode] > 0:
-            state_changes.opened.append(mode)
+            state_changes.opened.append(new_mode)
     if not state_changes.closed and not state_changes.opened:
         return None
     return state_changes
