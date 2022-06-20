@@ -4,13 +4,13 @@ import os
 # To start without DB.
 chats = [
    {
-      "chat_id": -724867662,
+      "chat_id": -687323795,
       "all": True
    },
    {
-      "chat_id": -687323795,
+      "chat_id": -724867662,
       "all": False,
-      "municipalities": ["GM0518", "GM0599"]
+      "municipalities": ["GM0518"]
    }
 ]
 
