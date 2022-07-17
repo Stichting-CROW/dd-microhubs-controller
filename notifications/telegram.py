@@ -18,7 +18,8 @@ def send_telegram_msg(text, chat_id):
    token = os.getenv("TELEGRAM_TOKEN")
    print(chat_id)
    print(text)
-   url_req = "https://api.telegram.org/bot" + token + "/sendMessage" + "?chat_id=" + str(chat_id) + "&text=" + text 
+   # https://github.com/python-telegram-bot/python-telegram-bot/wiki/Code-snippets#message-formatting-bold-italic-code-
+   url_req = "https://api.telegram.org/bot" + token + "/sendMessage" + "?chat_id=" + str(chat_id) + "&parse_mode=telegram.ParseMode.MARKDOWN&text=" + text 
    results = requests.get(url_req)
    print(results.json())
 

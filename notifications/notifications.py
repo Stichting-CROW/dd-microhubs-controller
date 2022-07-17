@@ -13,7 +13,7 @@ def send_notifications(state_changes):
 
 def get_open_microhub_text(state_change):
     open_microhub = Template("""
-Melding dashboard deelmobiliteit: microhub **$name_microhub** weer **beschikbaar** $url_microhub
+Melding dashboard deelmobiliteit: microhub *$name_microhub* weer *beschikbaar* $url_microhub
     """
     )
     stop = state_change.stop
@@ -22,14 +22,9 @@ Melding dashboard deelmobiliteit: microhub **$name_microhub** weer **beschikbaar
 
 def get_close_microhub_text(state_change):
     close_microhub = Template("""
-Melding dashboard deelmobiliteit: microhub **$name_microhub VOL** $url_microhub
+Melding dashboard deelmobiliteit: microhub *$name_microhub VOL* $url_microhub
     """
     )
     stop = state_change.stop
     return close_microhub.substitute(name_microhub = stop.name, url_microhub = "https://dashboarddeelmobiliteit.nl/map/zones/" + stop.geography_id,
         modalities = ','.join(state_change.closed))
-        
-
-
-
-
