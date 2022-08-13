@@ -13,7 +13,7 @@ def send_notifications(state_changes):
 
 def get_open_microhub_text(state_change):
     open_microhub = Template("""
-Microhub *[$name_microhub]($url_microhub)* weer *beschikbaar* \n\n $url_microhub
+Microhub <strong>[$name_microhub]($url_microhub)</strong> weer <strong>beschikbaar</strong> \n\n $url_microhub
     """
     )
     stop = state_change.stop
@@ -22,7 +22,7 @@ Microhub *[$name_microhub]($url_microhub)* weer *beschikbaar* \n\n $url_microhub
 
 def get_close_microhub_text(state_change):
     close_microhub = Template("""
-Microhub *[$name_microhub]($url_microhub) VOL* \n\n $url_microhub
+Microhub <strong>[$name_microhub]($url_microhub) </strong> \n\n $url_microhub
     """
     )
     stop = state_change.stop
