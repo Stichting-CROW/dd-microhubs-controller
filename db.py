@@ -21,9 +21,10 @@ def query_all_stops(cur):
         ) as location,
         status, capacity, stops.geography_id as geography_id, 
         -- Add margin of 10m's to take GPS inaccuracy into account.
+        -- changed 10m to 30m as an experiment. 
         json_build_object(
             'type',       'Feature',
-            'geometry',   ST_AsGeoJSON(ST_Buffer(area::geography, 10))::json,
+            'geometry',   ST_AsGeoJSON(ST_Buffer(area::geography, 30))::json,
             'properties',  json_build_object()
         ) as area, municipality
         FROM geographies
