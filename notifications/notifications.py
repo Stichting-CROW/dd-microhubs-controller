@@ -1,6 +1,7 @@
 from string import Template
 
 import notifications.telegram
+import re
 
 def send_notifications(state_changes):
     for state_change in state_changes:
@@ -13,18 +14,18 @@ def send_notifications(state_changes):
 
 def get_open_microhub_text(state_change):
     open_microhub = Template("""
-Microhub <strong>[$name_microhub]($url_microhub)</strong> weer <strong>beschikbaar</strong> \n\n $url_microhub
+Microhub *[$name_microhub]($url_microhub)* weer **beschikbaar** \n\n$url_microhub
     """
     )
     stop = state_change.stop
-    return open_microhub.substitute(name_microhub = stop.name, url_microhub = "https://dashboarddeelmobiliteit.nl/map/zones/" + stop.geography_id,
+    return open_microhub.substitute(name_microhub = re.escape(stop.name), url_microhub = re.escape("https://dashboarddeelmobiliteit.nl/map/zones/" + stop.geography_id),
         modalities = ','.join(state_change.opened))
 
 def get_close_microhub_text(state_change):
     close_microhub = Template("""
-Microhub <strong>[$name_microhub]($url_microhub) </strong> \n\n $url_microhub
+Microhub *[$name_microhub]($url_microhub) VOL* \n\n$url_microhub
     """
     )
     stop = state_change.stop
-    return close_microhub.substitute(name_microhub = stop.name, url_microhub = "https://dashboarddeelmobiliteit.nl/map/zones/" + stop.geography_id,
+    return close_microhub.substitute(name_microhub = re.escape(stop.name), url_microhub = re.escape("https://dashboarddeelmobiliteit.nl/map/zones/" + stop.geography_id),
         modalities = ','.join(state_change.closed))

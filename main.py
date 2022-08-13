@@ -104,10 +104,28 @@ def calculate_available_places(capacity, counted_vehicles, status):
             "car": 0,
             "other": 0
         }
+    # When a zone is manually opened, the available places are 'infinite', of course there is a capacity but a zone will not be closed after reaching this capacity.
+    if "control_automatic" in status and status["control_automatic"] == False: 
+        return return_available_places_for_zone_that_is_always_open(capacity)
     if "combined" in capacity:
         return calculate_places_available_combined(capacity["combined"], counted_vehicles)
     return calculate_places_available_per_mode(capacity, counted_vehicles)
 
+def return_available_places_for_zone_that_is_always_open(capacity):
+    # Default for The Hague for now.
+    if "combined" in capacity: 
+        return {
+            "moped": 9999,
+            "cargo_bicycle": 9999,
+            "bicycle": 9999,
+            "car": 0,
+            "other": 9999
+        }
+    available_places = capacity
+    for k, v in available_places.items():
+        if v > 0:
+            available_places[k] = 9999
+    return available_places
 
 def calculate_places_available_per_mode(capacity, counted_vehicles):
     print("CHECK")
