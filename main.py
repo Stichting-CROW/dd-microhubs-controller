@@ -121,11 +121,17 @@ def return_available_places_for_zone_that_is_always_open(capacity):
             "car": 0,
             "other": 9999
         }
-    available_places = capacity
-    for k, v in available_places.items():
+    places_available = {
+        "moped": 0,
+        "cargo_bicycle": 0,
+        "bicycle": 0,
+        "car": 0,
+        "other": 0
+    }
+    for k, v in capacity.items():
         if v > 0:
-            available_places[k] = 9999
-    return available_places
+            places_available[k] = 9999
+    return places_available
 
 def calculate_places_available_per_mode(capacity, counted_vehicles):
     print("CHECK")
