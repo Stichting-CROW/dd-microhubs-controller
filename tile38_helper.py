@@ -10,7 +10,7 @@ class Tile38Helper:
         # Initialisation
         conn_str = "redis://localhost:9851"
         if "TILE38_URL" in os.environ:
-            conn_str = os.getenv("TILE38_URL")
+            conn_str = f"redis://{os.getenv('TILE38_URL')}"
 
         return conn_str
 

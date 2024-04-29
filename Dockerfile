@@ -1,4 +1,4 @@
-FROM python:3.11-slim as builder
+FROM python:3.11.5-slim as builder
 
 RUN apt-get update && \
     apt-get -y install libpq-dev gcc
