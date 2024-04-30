@@ -37,11 +37,10 @@ async def update():
                 old_state = json.loads(res[index])
             new_state = calculate_available_places(stop.capacity, stop.num_vehicles_available, stop.status)
             new_state = check_flippering(new_state=new_state, old_state=old_state, capacity=stop.capacity)
-            
+
             is_returning = check_if_any_place_is_available(new_state)
             stop.status["is_returning"] = is_returning
             stop.num_places_available = new_state
-            print(stops[index].num_places_available)
             
             state_change = get_state_changes(stop, old_state, new_state)
             if state_change:
@@ -128,7 +127,6 @@ def return_available_places_for_zone_that_is_always_open(capacity):
     return places_available
 
 def calculate_places_available_per_mode(capacity, counted_vehicles):
-    print("CHECK")
     places_available = {
         "moped": 0,
         "cargo_bicycle": 0,

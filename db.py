@@ -32,7 +32,8 @@ def query_all_stops(cur):
         USING (zone_id) 
         JOIN stops
         USING (geography_id)
-        WHERE geographies.published_date >= NOW() AND (geographies.retire_date IS NULL OR geographies.retire_date < NOW());
+        WHERE NOW() >= geographies.published_date  AND (geographies.retire_date IS NULL OR NOW() < geographies.retire_date)
+        AND geography_type = 'stop';
     """
     cur.execute(stmt)
     return cur.fetchall()
@@ -40,6 +41,7 @@ def query_all_stops(cur):
 def convert_stop(row):
     if row["is_planned"]:
         row["status"]["is_returning"] = False
+        row["status"]["control_automatic"] = False
     return stop.MdsStop(
         stop_id=row["stop_id"],
         name=row["name"],
