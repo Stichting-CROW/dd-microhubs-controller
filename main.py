@@ -30,17 +30,12 @@ async def update():
         deltas_states = []
         # Determine new state.
         for index, stop in enumerate(stops):
-            print(stop.stop_id)
             old_state = res[index]
             if old_state == None:
                 old_state = get_initial_state(stop.capacity)
             else:
                 old_state = json.loads(res[index])
-            print("OLD")
-            print(old_state)
             new_state = calculate_available_places(stop.capacity, stop.num_vehicles_available, stop.status)
-            print("NEW")
-            print(new_state)
             new_state = check_flippering(new_state=new_state, old_state=old_state, capacity=stop.capacity)
             
             is_returning = check_if_any_place_is_available(new_state)
@@ -52,7 +47,6 @@ async def update():
             if state_change:
                 deltas_states.append(state_change)
 
-        print(deltas_states)
         store_stops(r, stops)
         notifications.send_notifications(deltas_states)
         

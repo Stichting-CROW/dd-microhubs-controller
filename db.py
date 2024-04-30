@@ -26,17 +26,20 @@ def query_all_stops(cur):
             'type',       'Feature',
             'geometry',   ST_AsGeoJSON(ST_Buffer(area::geography, 30))::json,
             'properties',  json_build_object()
-        ) as area, municipality
+        ) as area, municipality, geographies.effective_date > NOW() as is_planned
         FROM geographies
         JOIN zones
         USING (zone_id) 
         JOIN stops
-        USING (geography_id);
+        USING (geography_id)
+        WHERE geographies.published_date >= NOW() AND (geographies.retire_date IS NULL OR geographies.retire_date < NOW());
     """
     cur.execute(stmt)
     return cur.fetchall()
       
 def convert_stop(row):
+    if row["is_planned"]:
+        row["status"]["is_returning"] = False
     return stop.MdsStop(
         stop_id=row["stop_id"],
         name=row["name"],
