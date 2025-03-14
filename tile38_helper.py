@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 import os
-from pyle38 import Tile38
+import redis
 
 class Tile38Helper:
     def __init__(self):
@@ -8,15 +8,14 @@ class Tile38Helper:
 
     def get_conn_str(self):
         # Initialisation
-        conn_str = "redis://localhost:9851"
+        conn_str = "localhost"
         if "TILE38_URL" in os.environ:
-            conn_str = f"redis://{os.getenv('TILE38_URL')}"
-
+            conn_str = os.getenv("TILE38_URL")
         return conn_str
 
     def initialize_connection(self):
         conn_str = self.get_conn_str()
-        self._conn = Tile38(url=conn_str)
+        self._conn = redis.Redis(host=conn_str, port=9851)
 
     @contextmanager
     def get_resource(self):

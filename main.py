@@ -4,9 +4,9 @@ import asyncio
 from redis_helper import redis_helper
 from pydantic import BaseModel
 import time
-import stop
 import json
 from notifications import notifications
+from stop import MdsStop
 
 async def start_updating():
     while True:
@@ -18,12 +18,14 @@ async def start_updating():
 
 async def update():
     stops = db.get_all_stops_from_db()
+
+    vehicle_counts = await tile38.get_vehicles_in_stops(stops)
+
     with redis_helper.get_resource() as r:
         # Count vehicles
         pipe = r.pipeline()
-        for stop in stops:
-            result = await tile38.get_vehicles(stop.area)
-            stop.num_vehicles_available = count_modes(result=result)
+        for stop, count in zip(stops, vehicle_counts):
+            stop.num_vehicles_available = count_modes(result=count)
             pipe.get("stop:" + stop.stop_id + ":status")
         res = pipe.execute()
 
@@ -80,8 +82,8 @@ def count_modes(result):
         "car": 0,
         "other": 0
     }
-    for vehicle in result.objects:
-        mode = vehicle.id.split(":")[2]
+    for vehicle_id in result[1]:
+        mode = vehicle_id.decode("utf-8").split(":")[2]
         if mode in vehicles_available:
             vehicles_available[mode] += 1
         else:
@@ -226,7 +228,7 @@ def check_flippering_combined(new_state, old_state, capacity):
     return new_state
 
 class StateChange(BaseModel):
-    stop: stop.MdsStop
+    stop: MdsStop
     opened: list[str] = []
     closed: list[str] = []
 

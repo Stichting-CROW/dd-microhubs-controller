@@ -1,5 +1,5 @@
 pyle38==0.9.1
-psycopg2==2.9.3
+psycopg2==2.9.10
 pydantic==1.10.12
 geojson-pydantic==0.3.3
 redis==4.6.0 

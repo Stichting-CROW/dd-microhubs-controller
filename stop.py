@@ -1,9 +1,9 @@
-from geojson_pydantic import Feature, Point, Polygon
+from geojson_pydantic import Feature, Point, Polygon, MultiPolygon
 from pydantic import BaseModel
-from typing import Dict
+from typing import Dict, Union
 
 PointFeatureModel = Feature[Point, Dict]
-PolygonFeatureModel = Feature[Polygon, Dict]
+PolygonFeatureModel = Feature[Union[Polygon, MultiPolygon], Dict]
 class MdsStop(BaseModel):
     stop_id: str
     name: str
